@@ -27,7 +27,7 @@ RNGkind(sample.kind = "Rounding")
 set.seed(123)
 ```
 
-Function to calculate performance metrics
+## Function to calculate performance metrics
 ```{r}
 # performance measures
 get_stats <- function(preds, true_class, probs){
@@ -54,11 +54,9 @@ get_stats <- function(preds, true_class, probs){
 
 ```
 
-
-
-Load MSK training data 
-Table S1: Description of MSK dataset
+## Table S1: Description of MSK dataset
 ```{r warning = FALSE}
+# Load MSK training data 
 data <- read.csv("../data_files/Data_file_S1_MSKCC_annotated.csv")
 data <- data[which(!duplicated(data[,1:2])),]
 
@@ -68,8 +66,7 @@ table(pat_table$tissue)
 table(data[,c("tissue","bio_source")])
 ```
 
-
-Train random forest and logistic regression models
+## Train random forest and logistic regression models
 ```{r}
 # Format data
 data$class <- gsub("_.*", "", data$bio_source)
@@ -82,7 +79,6 @@ data <- as.data.frame(data, stringsAsFactors=F)
 cols2use <- c("class","gene_name_label","CH_Mutation","median_ctDNA", "tq_ctDNA", grep("SBS", colnames(data), value=T), "cfdna_af", 
               "gnomad_AF","inCosmic","freq.heme_lymph","freq.solid", "population.frequency")
 
-
 #####
 # Set up caret
 train_data <- data.frame(subset(data, class %in% c("biopsy","wbc") & model_group !="valiation"))
@@ -94,7 +90,6 @@ idx <- lapply(idx, function(x){as.numeric(x)})
 
 train_data$cfdna_af <- as.numeric(as.character(train_data$cfdna_af))
 train_data$gnomad_AF <- as.numeric(as.character(train_data$gnomad_AF))
-
 
 rf_model <- train(
   form = class ~ .,
@@ -112,10 +107,9 @@ log_model <- train(
   method = "glm",
   family = "binomial"
 )
-
 ```
 
-Table S3: Performance on MSKCC training and testing datasets
+## Table S3: Performance on MSKCC training and testing datasets
 ```{r}
 val_set <- subset(data, data$model_group=="valiation")
 val_set$cfdna_af <- as.numeric(as.character(val_set$cfdna_af))
@@ -135,10 +129,9 @@ testing_results <- data.frame(LR_testing=get_stats(predict(log_model, newdata = 
 print(t(training_results[c("roc","prec","rec","f1"),]))
 
 print(t(testing_results[c("roc","prec","rec","f1"),]))
-
 ```
 
-Figure 1b - ROC comparison
+## Figure 1b - ROC comparison
 ```{r fig.width=5, fig.height=5}
 plot_rocr <- function(model_preds, true_class, colors, ...){
   for (i in 1:ncol(model_preds)) {
@@ -155,17 +148,14 @@ plot_rocr(preds, val_set_log$class, c("black","red"))
 pdf("../output/Figure_1b_ROC_comparison_Script01.pdf", width=5, height=5, useDingbats = F)
 plot_rocr(preds, val_set_log$class, c("black","red"))
 dev.off()
-
-
 ```
 
-Figure 1c,d - variable importance plots
+## Figure 1c,d - variable importance plots
 ```{r}
 # Plot of logistic regression feature importance
 par(mfrow=c(1,2))
 plot(varImp(rf_model), top=20, xlim=c(-5,105), main="Random Forest feature importance")
 plot(varImp(log_model), top=20, xlim=c(-5,105), main="Logistic Regression feature importance")
-
 
 pdf("../output/Figure_1c_RF_feature_importance_Script01.pdf", width=6, height=4, useDingbats = F)
 plot(varImp(rf_model), top=20, xlim=c(-5,105), main="Random Forest feature importance")
@@ -174,15 +164,13 @@ dev.off()
 pdf("../output/Figure_1d_LR_feature_importance_Script01.pdf", width=6, height=4, useDingbats = F)
 plot(varImp(log_model), top=20, xlim=c(-5,105), main="Logistic Regression feature importance")
 dev.off()
-
-
 ```
-Testing with held out variants from healthy patients
+
+## Testing with held out variants from healthy patients
 ```{r}
 train_data <- data.frame(subset(data, class %in% c("biopsy","wbc") & model_group !="valiation"))
 control_data <- subset(data, tissue == "Control" & class != "vuso")
 train_data <- subset(train_data, tissue != "Control")
-
 
 idx_agg <- aggregate(1:nrow(train_data), by=list(train_data$model_group), paste)
 idx <- as.list(idx_agg[,2])
@@ -191,7 +179,6 @@ idx <- lapply(idx, function(x){as.numeric(x)})
 
 train_data$cfdna_af <- as.numeric(as.character(train_data$cfdna_af))
 train_data$gnomad_AF <- as.numeric(as.character(train_data$gnomad_AF))
-
 
 rf_model_control <- train(
   form = class ~ .,
@@ -222,7 +209,7 @@ rf_control_preds <- predict(rf_model_control, newdata = val_set)
 control_preds <- data.frame(lr_pred=lr_control_preds, rf_pred=rf_control_preds, gene = val_set_log$gene_name)
 ```
 
-Table S4:Table of mistakes made by each model and their genes
+## Table S4:Table of mistakes made by each model and their genes
 ```{r}
 lr_mistake_genes <- table(subset(control_preds, lr_pred == "biopsy")$gene)
 rf_mistake_genes <- table(subset(control_preds, rf_pred == "biopsy")$gene)
@@ -239,13 +226,10 @@ mistake_mat[is.na(mistake_mat)] <- 0
 kable(rbind(mistake_mat[order(mistake_mat$Gene),], c("Total", colSums(mistake_mat[,2:3]))))
 ```
 
-
-
+## Save models
 ```{r}
-# Save model
 saveRDS(log_model, "../output/logistic_log2_model_msk.RDS")
 saveRDS(rf_model, "../output/rf_model_msk.RDS")
-
 ```
 
 ```{r}
