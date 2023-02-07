@@ -10,8 +10,7 @@ print(date())
 library(pROC)
 ```
 
-
-Performance
+## Performance functions, read in data
 ```{r}
 auc <- function(true_class, probs){
   test_roc <- roc(true_class ~ probs, plot=F)
@@ -72,9 +71,9 @@ leal_lr <- performance(var_leal, model_column="chip_log_pred", label_column="Ori
                        tumor_label="ctDNA", prob_column = "chip_log_pred_prob.wbc")
 leal_rf <- performance(var_leal, model_column="chip_rf_pred", label_column="Origin", chip_label="CHIP", 
                        tumor_label="ctDNA", prob_column = "chip_rf_pred_prob.wbc")
-
 ```
-Table S6: performance on public datasets
+
+## Table S6: performance on public datasets
 ```{r}
 s6 <- cbind(zhang_lr = zhang_all_lr,
                 zhang_rf = zhang_all_rf,
@@ -89,8 +88,9 @@ s6 <- cbind(zhang_lr = zhang_all_lr,
 
 print(t(s6[c("auc","precision","recall","f1"),]))
 ```
-Summary of false positives, etc in Zhang and Chin datasets
-Supplementary Note figure
+
+## Summary of false positives, etc in Zhang and Chin datasets
+Figure S12
 ```{r, fig.width=5, fig.height=4.5}
 ## Zhang
 table(var_zhang[,c("isCH","chip_log_pred")])
@@ -173,7 +173,7 @@ af_vs_fpr(var_chin, "chip_rf_pred", "inWBC", "TRUE", "FALSE", "cfdna_af", c(seq(
 
 ```
 
-Variants in / not in training genes
+## Variants in / not in training genes
 Table S7
 ```{r}
 training <- read.csv("../data_files/Data_file_S1_MSKCC_annotated.csv", stringsAsFactors = F)
@@ -263,7 +263,7 @@ rownames(s7) <- c("Zhang, WBC/plasma","Zhang, WBC/plasma/tissue", "Leal","Chabon
 s7
 ```
 
-Changing threshold plots
+## Changing threshold plots
 Figure S1
 ```{r, fig.width=5, fig.height=5}
 
@@ -318,10 +318,9 @@ for(perf in c("F1","Precision","Recall")){
 }
 
 dev.off()
-
 ```
 
-Figure S11: Histogram of all allele fractions
+## Figure S11: Histogram of all allele fractions
 ```{r}
 pdf("../output/Figure_S11_af_hists_Script02.pdf", width=12, height=8, useDingbats = F)
 par(mfrow=c(2,3))
