@@ -3,10 +3,11 @@ title: "Script 02: external dataset validation"
 output: html_document
 ---
 
+Note that Data_file_S2.zip must be uncompressed before running this script. 
+
 ```{r}
 print(date())
 library(pROC)
-library(openxlsx)
 ```
 
 
@@ -37,7 +38,7 @@ performance <- function(x, model_column, label_column, chip_label, tumor_label, 
 }
 
 ##
-var_zhang <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Zhang_et_al_predictions")
+var_zhang <- read.table("../data_files/Data_file_S2/Data_file_S2_Zhang_et_al_preds.txt", sep="\t", header=T, stringsAsFactors=F)
 
 zhang_all_lr <- performance(var_zhang, model_column="chip_log_pred", label_column="isCH", chip_label="yes", 
                            tumor_label="no", prob_column = "chip_log_pred_prob.wbc")
@@ -50,7 +51,7 @@ zhang_tissue_rf <- performance(var_zhang, model_column="chip_rf_pred", label_col
                                tumor_label="Biopsy matched", prob_column = "chip_rf_pred_prob.wbc")
 
 ##
-var_chin <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Chin_et_al_predictions")
+var_chin <- read.table("../data_files/Data_file_S2/Data_file_S2_Chin_et_al_preds.txt", sep="\t", header=T, stringsAsFactors=F)
 var_chin$inWBC <- var_chin$wbc.af > 0
 
 chin_lr <- performance(var_chin, model_column="chip_log_pred", label_column="inWBC", chip_label="TRUE", 
@@ -59,14 +60,14 @@ chin_rf <- performance(var_chin, model_column="chip_rf_pred", label_column="inWB
                        tumor_label="FALSE", prob_column = "chip_rf_pred_prob.wbc")
 
 ##
-var_chabon <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Chabon_et_al_predictions")
+var_chabon <- read.table("../data_files/Data_file_S2/Data_file_S2_Chabon_et_al_preds.txt", sep="\t", header=T, stringsAsFactors=F)
 chabon_lr <- performance(var_chabon, model_column="chip_log_pred", label_column="Mutation.status.in.matched.WBCsd", chip_label="WBC present",
                          tumor_label="WBC absent", prob_column = "chip_log_pred_prob.wbc")
 chabon_rf <- performance(var_chabon, model_column="chip_rf_pred", label_column="Mutation.status.in.matched.WBCsd", chip_label="WBC present", 
                         tumor_label="WBC absent", prob_column = "chip_rf_pred_prob.wbc")
 
 ##
-var_leal <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Leal_et_al_predictions")
+var_leal <- read.table("../data_files/Data_file_S2/Data_file_S2_Leal_et_al_preds.txt", sep="\t", header=T, stringsAsFactors=F)
 leal_lr <- performance(var_leal, model_column="chip_log_pred", label_column="Origin", chip_label="CHIP", 
                        tumor_label="ctDNA", prob_column = "chip_log_pred_prob.wbc")
 leal_rf <- performance(var_leal, model_column="chip_rf_pred", label_column="Origin", chip_label="CHIP", 
