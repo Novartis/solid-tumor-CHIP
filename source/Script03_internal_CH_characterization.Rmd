@@ -1,8 +1,10 @@
 ---
 title: "Script 06: Internal CHIP characterization"
 output: html_document
+author: "Lauren Fairchild"
 ---
 
+## Read in data
 ```{r}
 print(date())
 
@@ -13,12 +15,11 @@ pat_data <- read.csv("../data_files/Data_file_S3_patient_info.csv", header=T, st
 
 snvs <- read.csv("../data_files/Data_file_S4_SNV_calls.csv", header=T, stringsAsFactors = F)
 indels <- read.csv("../data_files/Data_file_S5_INDEL_calls.csv", header=T, stringsAsFactors = F)
-
 ```
 
 
 
-Figure 2c: CH prediction by age line graph
+## Figure 2c: CH prediction by age line graph
 Some modifications to this figure:
 - combine ND and NoCH groups
 - CHIP = chip canonical + chip myeloid
@@ -73,7 +74,7 @@ print(fisher.test(fisher.mat))
 
 ```
 
-Figure S4 - Comparison of CH incidence in cancer and healthy controls (from other published works)
+## Figure S4 - Comparison of CH incidence in cancer and healthy controls (from other published works)
 Some modifications to this figure:
 - combine ND and NoCH groups
 - CHIP = chip canonical + chip myeloid
@@ -205,7 +206,7 @@ for(i in plot_order){
 dev.off()
 ```
 
-Figure S3 - Number of CHIP variants per patient
+## Figure S3 - Number of CHIP variants per patient
 ```{r}
 barplot(table(table(c(snvs$anon_ID, indels$anon_ID))), xlab="Number of CH variants per patient",
         main="CH+ patients, logistic regression")
@@ -217,7 +218,7 @@ dev.off()
 ```
 
 
-Figure 3B - Barplots of CH gene frequency by indication 
+## Figure 3B - Barplots of CH gene frequency by indication 
 ```{r}
 # create matrix of counts, CH gene + by indication
 genes_of_interest <- c("DNMT3A","TET2","ASXL1","JAK2","PPM1D","SF3B1")
@@ -260,7 +261,7 @@ dev.off()
 ```
 
 
-Figure S7 - Odds ratios for specific genes
+## Figure S7 - Odds ratios for specific genes
 ```{r fig.width=12, fig.height=8}
 plot_odds <- function(model, num_indics, ...){
   num_lines <- num_indics - 1
@@ -335,8 +336,6 @@ for(gene in genes_of_interest){
   plot_odds(model, length(indics_keep), main=gene)
 }
 dev.off()
-
-
 ```
 
 ```{r}
