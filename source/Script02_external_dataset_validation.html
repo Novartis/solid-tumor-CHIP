@@ -358,8 +358,10 @@ display: none;
 </div>
 
 
+<p>Note that Data_file_S2.zip must be uncompressed before running this
+script.</p>
 <pre class="r"><code>print(date())</code></pre>
-<pre><code>## [1] &quot;Tue Feb  7 13:38:56 2023&quot;</code></pre>
+<pre><code>## [1] &quot;Tue Feb  7 14:15:02 2023&quot;</code></pre>
 <pre class="r"><code>library(pROC)</code></pre>
 <pre><code>## Warning: package &#39;pROC&#39; was built under R version 3.6.3</code></pre>
 <pre><code>## Type &#39;citation(&quot;pROC&quot;)&#39; for a citation.</code></pre>
@@ -368,7 +370,6 @@ display: none;
 <pre><code>## The following objects are masked from &#39;package:stats&#39;:
 ## 
 ##     cov, smooth, var</code></pre>
-<pre class="r"><code>library(openxlsx)</code></pre>
 <p>Performance</p>
 <pre class="r"><code>auc &lt;- function(true_class, probs){
   test_roc &lt;- roc(true_class ~ probs, plot=F)
@@ -395,7 +396,7 @@ performance &lt;- function(x, model_column, label_column, chip_label, tumor_labe
 }
 
 ##
-var_zhang &lt;- read.xlsx(&quot;../data_files/Data_file_S2_external_predictions.xlsx&quot;, sheet=&quot;Zhang_et_al_predictions&quot;)
+var_zhang &lt;- read.table(&quot;../data_files/Data_file_S2/Data_file_S2_Zhang_et_al_preds.txt&quot;, sep=&quot;\t&quot;, header=T, stringsAsFactors=F)
 
 zhang_all_lr &lt;- performance(var_zhang, model_column=&quot;chip_log_pred&quot;, label_column=&quot;isCH&quot;, chip_label=&quot;yes&quot;, 
                            tumor_label=&quot;no&quot;, prob_column = &quot;chip_log_pred_prob.wbc&quot;)</code></pre>
@@ -414,7 +415,7 @@ zhang_all_lr &lt;- performance(var_zhang, model_column=&quot;chip_log_pred&quot;
 <pre><code>## Setting levels: control = Biopsy matched, case = WBC matched
 ## Setting direction: controls &lt; cases</code></pre>
 <pre class="r"><code>##
-var_chin &lt;- read.xlsx(&quot;../data_files/Data_file_S2_external_predictions.xlsx&quot;, sheet=&quot;Chin_et_al_predictions&quot;)
+var_chin &lt;- read.table(&quot;../data_files/Data_file_S2/Data_file_S2_Chin_et_al_preds.txt&quot;, sep=&quot;\t&quot;, header=T, stringsAsFactors=F)
 var_chin$inWBC &lt;- var_chin$wbc.af &gt; 0
 
 chin_lr &lt;- performance(var_chin, model_column=&quot;chip_log_pred&quot;, label_column=&quot;inWBC&quot;, chip_label=&quot;TRUE&quot;, 
@@ -426,7 +427,7 @@ chin_lr &lt;- performance(var_chin, model_column=&quot;chip_log_pred&quot;, labe
 <pre><code>## Setting levels: control = FALSE, case = TRUE
 ## Setting direction: controls &lt; cases</code></pre>
 <pre class="r"><code>##
-var_chabon &lt;- read.xlsx(&quot;../data_files/Data_file_S2_external_predictions.xlsx&quot;, sheet=&quot;Chabon_et_al_predictions&quot;)
+var_chabon &lt;- read.table(&quot;../data_files/Data_file_S2/Data_file_S2_Chabon_et_al_preds.txt&quot;, sep=&quot;\t&quot;, header=T, stringsAsFactors=F)
 chabon_lr &lt;- performance(var_chabon, model_column=&quot;chip_log_pred&quot;, label_column=&quot;Mutation.status.in.matched.WBCsd&quot;, chip_label=&quot;WBC present&quot;,
                          tumor_label=&quot;WBC absent&quot;, prob_column = &quot;chip_log_pred_prob.wbc&quot;)</code></pre>
 <pre><code>## Setting levels: control = WBC absent, case = WBC present
@@ -436,7 +437,7 @@ chabon_lr &lt;- performance(var_chabon, model_column=&quot;chip_log_pred&quot;, 
 <pre><code>## Setting levels: control = WBC absent, case = WBC present
 ## Setting direction: controls &lt; cases</code></pre>
 <pre class="r"><code>##
-var_leal &lt;- read.xlsx(&quot;../data_files/Data_file_S2_external_predictions.xlsx&quot;, sheet=&quot;Leal_et_al_predictions&quot;)
+var_leal &lt;- read.table(&quot;../data_files/Data_file_S2/Data_file_S2_Leal_et_al_preds.txt&quot;, sep=&quot;\t&quot;, header=T, stringsAsFactors=F)
 leal_lr &lt;- performance(var_leal, model_column=&quot;chip_log_pred&quot;, label_column=&quot;Origin&quot;, chip_label=&quot;CHIP&quot;, 
                        tumor_label=&quot;ctDNA&quot;, prob_column = &quot;chip_log_pred_prob.wbc&quot;)</code></pre>
 <pre><code>## Setting levels: control = CHIP, case = ctDNA</code></pre>
@@ -880,15 +881,15 @@ dev.off()</code></pre>
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] openxlsx_4.2.4 pROC_1.17.0.1 
+## [1] pROC_1.17.0.1
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] Rcpp_1.0.7        digest_0.6.27     plyr_1.8.6        R6_2.5.1         
-##  [5] jsonlite_1.7.2    magrittr_2.0.1    evaluate_0.15     zip_2.2.0        
-##  [9] stringi_1.7.3     rlang_1.0.6       cli_3.3.0         rstudioapi_0.13  
-## [13] jquerylib_0.1.4   bslib_0.2.5.1     rmarkdown_2.10    tools_3.6.1      
-## [17] stringr_1.4.0     glue_1.6.2        xfun_0.30         yaml_2.2.1       
-## [21] compiler_3.6.1    htmltools_0.5.1.1 knitr_1.30        sass_0.4.0</code></pre>
+##  [5] jsonlite_1.7.2    magrittr_2.0.1    evaluate_0.15     stringi_1.7.3    
+##  [9] rlang_1.0.6       cli_3.3.0         rstudioapi_0.13   jquerylib_0.1.4  
+## [13] bslib_0.2.5.1     rmarkdown_2.10    tools_3.6.1       stringr_1.4.0    
+## [17] glue_1.6.2        xfun_0.30         yaml_2.2.1        compiler_3.6.1   
+## [21] htmltools_0.5.1.1 knitr_1.30        sass_0.4.0</code></pre>
 
 
 
