@@ -1,5 +1,0 @@
-biopsy_matched	biopsy_subthreshold	vuso	wbc_matched
-Breast	101	9	78	174
-Control	0	0	49	243
-Lung	186	34	68	286
-Prostate	79	27	89	261
