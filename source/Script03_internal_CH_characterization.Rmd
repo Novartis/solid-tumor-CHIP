@@ -1,0 +1,345 @@
+---
+title: "Script 06: Internal CHIP characterization"
+output: html_document
+---
+
+```{r}
+print(date())
+
+library(ggsci)
+library(RColorBrewer)
+
+pat_data <- read.csv("../data_files/Data_file_S3_patient_info.csv", header=T, stringsAsFactors=F)
+
+snvs <- read.csv("../data_files/Data_file_S4_SNV_calls.csv", header=T, stringsAsFactors = F)
+indels <- read.csv("../data_files/Data_file_S5_INDEL_calls.csv", header=T, stringsAsFactors = F)
+
+```
+
+
+
+Figure 2c: CH prediction by age line graph
+Some modifications to this figure:
+- combine ND and NoCH groups
+- CHIP = chip canonical + chip myeloid
+- Canonical CHIP = chip canonical
+```{r}
+cols <- pal_npg()(8)
+
+table(pat_data$CHIP_STATUS)
+table(pat_data$CHIP_STATUS)/nrow(pat_data)
+
+plot_cols <- c(CH_canonical=cols[1], CH_all=cols[2], No_CH="grey25")
+
+freqs <- aggregate(pat_data$CHIP_STATUS, by=list(pat_data$age_bin), function(x){table(x) / length(x)})
+freqs$counts <- as.vector(table(pat_data$age_bin))
+
+freqs_plot <- data.frame(CH_all = freqs$x[,"CH_canonical"] + freqs$x[,"CH_myeloid"],
+                         CH_canonical = freqs$x[,"CH_canonical"],
+                         No_CH = freqs$x[,"ND"] + freqs$x[,"NO_CH"],
+                         Group.1 = freqs$Group.1,
+                         counts = freqs$counts)
+
+for(i in 1:(ncol(freqs_plot)-2)){
+  if(i == 1){
+    plot(freqs_plot[c(2:6,1),i], type='l', ylim=c(0,0.8), col=plot_cols[colnames(freqs_plot)[i]], lwd=2, xaxt="n", xlab="Age", ylab="Proportion of patients")
+    axis(1, 1:length(freqs$Group.1), paste0(freqs$Group.1[c(2:6,1)], "\nN=", freqs$counts[c(2:6,1)]), tick=F)
+  }else{
+    lines(freqs_plot[c(2:6,1),i], col=plot_cols[colnames(freqs_plot)[i]], lwd=2)
+  }
+}
+legend("topleft", names(plot_cols), fill=plot_cols, bty='n')
+
+pdf("../output/Figure_2c_CHIP_age_Script03.pdf", width=6, height=5, useDingbats = F)
+for(i in 1:(ncol(freqs_plot)-2)){
+  if(i == 1){
+    plot(freqs_plot[c(2:6,1),i], type='l', ylim=c(0,0.8), col=plot_cols[colnames(freqs_plot)[i]], lwd=2, xaxt="n", xlab="Age", ylab="Proportion of patients")
+    axis(1, 1:length(freqs$Group.1), paste0(freqs$Group.1[c(2:6,1)], "\nN=", freqs$counts[c(2:6,1)]), tick=F)
+  }else{
+    lines(freqs_plot[c(2:6,1),i], col=plot_cols[colnames(freqs_plot)[i]], lwd=2)
+  }
+}
+legend("topleft", names(plot_cols), fill=plot_cols, bty='n')
+dev.off()
+
+
+# p-value for difference in fraction of CH+ patients in oldest and youngest groups (fisher's exact test)
+fisher.mat <- matrix(c(nrow(subset(pat_data, age_bin %in% c("20-29","30-39") & CHIP_STATUS == "CH_canonical")),
+                       nrow(subset(pat_data, age_bin %in% c("20-29","30-39") & CHIP_STATUS != "CH_canonical")),
+                       nrow(subset(pat_data, age_bin %in% c(">70") & CHIP_STATUS == "CH_canonical")),
+                       nrow(subset(pat_data, age_bin %in% c(">70") & CHIP_STATUS != "CH_canonical"))), nrow=2)
+print(fisher.mat)
+print(fisher.test(fisher.mat))
+
+```
+
+Figure S4 - Comparison of CH incidence in cancer and healthy controls (from other published works)
+Some modifications to this figure:
+- combine ND and NoCH groups
+- CHIP = chip canonical + chip myeloid
+- Canonical CHIP = chip canonical
+```{r}
+pat_subset <- subset(pat_data, !is.na(age_bin))
+
+freqs_noAF <- aggregate(pat_subset$CHIP_STATUS, by=list(pat_subset$age_bin), function(x){table(x) / length(x)})
+freqs_noAF <- data.frame(age.bin=freqs_noAF$Group.1, freqs_noAF$x)
+
+pat_subset$CHIP_STATUS_2per <- "NO_CH"
+pat_subset$CHIP_STATUS_2per[!is.na(pat_subset$max.obs.myeloid.chip.af) & pat_subset$max.obs.myeloid.chip.af > 0.02] <- "CH_myeloid"
+pat_subset$CHIP_STATUS_2per[!is.na(pat_subset$max.obs.canon.chip.af) & pat_subset$max.obs.canon.chip.af > 0.02] <- "CH_canonical"
+freqs_AF <- aggregate(factor(pat_subset$CHIP_STATUS_2per), by=list(pat_subset$age_bin), function(x){table(x) / length(x)})
+freqs_AF <- data.frame(age.bin=freqs_AF$Group.1, freqs_AF$x)
+
+# Bolton et al, 2020 (extended data table 1)
+bolton_freq <- data.frame(age.bin=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89"),
+                          CH=c(0.039, 0.044, 0.051, 0.08, 0.13, 0.22, 0.36, 0.50, 0.63))
+
+
+# Jaiswal et al, 2014 (calculated from Figure 1)
+jaiswal_freq <- data.frame(age.bin=c("20-29","30-39","40-49","50-59","60-69","70-79","80-89","90-99","100-108"),
+                           CH=c(0, 0.001, 0.017, 0.025, 0.056, 0.095, 0.117, 0.163, 0.294))
+
+all_freqs <- data.frame(age.bin=c("0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89","90-99","100-108"))
+all_freqs$Bolton <- bolton_freq[match(all_freqs$age.bin, bolton_freq$age.bin), "CH"]
+all_freqs$CH_all <- rowSums(freqs_noAF[match(all_freqs$age.bin, freqs_noAF$age.bin), c("CH_canonical","CH_myeloid")])
+all_freqs$CH_canonical <- freqs_noAF[match(all_freqs$age.bin, freqs_noAF$age.bin), "CH_canonical"]
+all_freqs$Jaiswal_2014 <- jaiswal_freq[match(all_freqs$age.bin, jaiswal_freq$age.bin), "CH"]
+all_freqs$CHall_2p <- rowSums(freqs_AF[match(all_freqs$age.bin, freqs_AF$age.bin), c("CH_canonical","CH_myeloid")])
+all_freqs$CH_canonical_2p <- freqs_AF[match(all_freqs$age.bin, freqs_AF$age.bin), "CH_canonical"]
+
+
+# Make two plots, one using the 2% cutoff and one not
+print(all_freqs)
+
+plot_order <- c(2,5,3,4)
+cols_plot <- cols
+names(cols_plot) <- colnames(all_freqs)[plot_order]
+for(i in plot_order){
+  if(i == plot_order[1]){
+    plot(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[plot_order]], type='l', lwd=2, xaxt="n", ylim=c(0,0.7),
+         xlab="Age", ylab="Proportion of positive patients")
+         axis(1, at=1:nrow(all_freqs), labels=F)
+    text(x = 1:nrow(all_freqs),
+         y = par("usr")[3]-0.07,
+         labels = all_freqs[,1],
+         xpd = NA,
+         ## Rotate the labels by 35 degrees.
+         srt = 35,
+         cex = 1.2)
+    legend("topleft", colnames(all_freqs)[plot_order], fill=cols_plot[colnames(all_freqs)[plot_order]], bty='n')
+  }else{
+    lines(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[i]], type='l', lwd=2)
+  }
+}
+
+pdf("../output/Figure_S4a_ch_age_all_Script03.pdf", width=7, height=5, useDingbats = F)
+plot_order <- c(2,5,3,4)
+cols_plot <- cols
+names(cols_plot) <- colnames(all_freqs)[plot_order]
+for(i in plot_order){
+  if(i == plot_order[1]){
+    plot(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[plot_order]], type='l', lwd=2, xaxt="n", ylim=c(0,0.7),
+         xlab="Age", ylab="Proportion of positive patients")
+         axis(1, at=1:nrow(all_freqs), labels=F)
+    text(x = 1:nrow(all_freqs),
+         y = par("usr")[3]-0.07,
+         labels = all_freqs[,1],
+         xpd = NA,
+         ## Rotate the labels by 35 degrees.
+         srt = 35,
+         cex = 1.2)
+    legend("topleft", colnames(all_freqs)[plot_order], fill=cols_plot[colnames(all_freqs)[plot_order]], bty='n')
+  }else{
+    lines(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[i]], type='l', lwd=2)
+  }
+}
+dev.off()
+
+
+
+
+plot_order <- c(2,5,6,7)
+cols_plot <- cols
+names(cols_plot) <- colnames(all_freqs)[plot_order]
+for(i in plot_order){
+  if(i == plot_order[1]){
+    plot(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[plot_order]], type='l', lwd=2, xaxt="n", ylim=c(0,0.7),
+         xlab="Age", ylab="Proportion of positive patients")
+    axis(1, at=1:nrow(all_freqs), labels=F)
+    text(x = 1:nrow(all_freqs),
+         y = par("usr")[3]-0.07,
+         labels = all_freqs[,1],
+         xpd = NA,
+         ## Rotate the labels by 35 degrees.
+         srt = 35,
+         cex = 1.2)
+    
+    legend("topleft", colnames(all_freqs)[plot_order], fill=cols_plot[colnames(all_freqs)[plot_order]], bty='n')
+  }else{
+    lines(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[i]], type='l', lwd=2)
+  }
+}
+
+pdf("../output/Figure_S4b_ch_age_2p_Script03.pdf", width=7, height=5, useDingbats = F)
+plot_order <- c(2,5,6,7)
+cols_plot <- cols
+names(cols_plot) <- colnames(all_freqs)[plot_order]
+for(i in plot_order){
+  if(i == plot_order[1]){
+    plot(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[plot_order]], type='l', lwd=2, xaxt="n", ylim=c(0,0.7),
+         xlab="Age", ylab="Proportion of positive patients")
+    axis(1, at=1:nrow(all_freqs), labels=F)
+    text(x = 1:nrow(all_freqs),
+         y = par("usr")[3]-0.07,
+         labels = all_freqs[,1],
+         xpd = NA,
+         ## Rotate the labels by 35 degrees.
+         srt = 35,
+         cex = 1.2)
+    
+    legend("topleft", colnames(all_freqs)[plot_order], fill=cols_plot[colnames(all_freqs)[plot_order]], bty='n')
+  }else{
+    lines(1:nrow(all_freqs), all_freqs[,i], col=cols_plot[colnames(all_freqs)[i]], type='l', lwd=2)
+  }
+}
+dev.off()
+```
+
+Figure S3 - Number of CHIP variants per patient
+```{r}
+barplot(table(table(c(snvs$anon_ID, indels$anon_ID))), xlab="Number of CH variants per patient",
+        main="CH+ patients, logistic regression")
+
+pdf("../output/Figure_S3_CH_per_patient_Script03.pdf", width=5, height=5, useDingbats = F)
+barplot(table(table(c(snvs$anon_ID, indels$anon_ID))), xlab="Number of CH variants per patient",
+        main="CH+ patients, logistic regression")
+dev.off()
+```
+
+
+Figure 3B - Barplots of CH gene frequency by indication 
+```{r}
+# create matrix of counts, CH gene + by indication
+genes_of_interest <- c("DNMT3A","TET2","ASXL1","JAK2","PPM1D","SF3B1")
+indics <- names(table(pat_subset$INDIC))[table(pat_subset$INDIC) > 100]
+
+
+ch_freqs <- do.call(cbind, lapply(genes_of_interest, function(gene){
+  pos_pats <- unique(c(subset(snvs, gene_name == gene)$anon_ID,
+                      subset(indels, gene_name == gene)$anon_ID))
+  pat_subset <- subset(pat_data, !is.na(INDIC))
+  pat_subset$CH <- c(0,1)[as.numeric(pat_subset$anon_ID %in% pos_pats)+1]
+  pat_subset_indics <- subset(pat_subset, unlist(INDIC) %in% indics)
+  
+  
+  # proportion of patients with variant in gene
+  counts <- table(pat_subset_indics[,c("INDIC","CH")])
+  freqs <- counts / rowSums(counts)
+  freqs[,2]
+}))
+
+colnames(ch_freqs) <- genes_of_interest
+
+colors <- brewer.pal(5, "Set2")
+names(colors) <- indics
+
+barplot(ch_freqs[c("NON-SMALL CELL LUNG CANCER","TRIPLE NEGATIVE BREAST CANCER",
+                   "BREAST CANCER","CUTANEOUS MELANOMA","COLORECTAL CANCER"),], 
+        beside=T, col=colors, ylab="Proportion of patients with variant")
+legend("top", c("NON-SMALL CELL LUNG CANCER","TRIPLE NEGATIVE BREAST CANCER",
+                   "BREAST CANCER","CUTANEOUS MELANOMA","COLORECTAL CANCER"), fill=colors, bty='n', cex=0.8)
+
+pdf("../output/Figure_3b_barplot_Script03.pdf", width=7, height=4.5, useDingbats = F)
+barplot(ch_freqs[c("NON-SMALL CELL LUNG CANCER","TRIPLE NEGATIVE BREAST CANCER",
+                   "BREAST CANCER","CUTANEOUS MELANOMA","COLORECTAL CANCER"),], 
+        beside=T, col=colors, ylab="Proportion of patients with variant")
+legend("top", c("NON-SMALL CELL LUNG CANCER","TRIPLE NEGATIVE BREAST CANCER",
+                   "BREAST CANCER","CUTANEOUS MELANOMA","COLORECTAL CANCER"), fill=colors, bty='n', cex=0.8)
+dev.off()
+
+```
+
+
+Figure S7 - Odds ratios for specific genes
+```{r fig.width=12, fig.height=8}
+plot_odds <- function(model, num_indics, ...){
+  num_lines <- num_indics - 1
+  
+  # Get confidence interval values
+  confint <- as.data.frame(exp(confint(model)))
+  confint$estimate <- exp(coef(summary(model))[,"Estimate"])
+  confint <- confint[2:num_indics,] 
+  
+  # Add pvalue to confint table
+  confint$pvalue <- coef(summary(model))[2:num_indics,"Pr(>|z|)"]
+  
+  # Plot logistic regression estimates with 95% confidence intervals
+  par(mar=c(5,17,3,2))
+  plot(log10(confint$estimate), 1:num_lines, 
+       xlim=c(log10(min(confint$`2.5 %`)), log10(max(confint$`97.5 %`))), yaxt='n', 
+       xlab="Log odds ratio", ylab="", pch=16, ylim=c(1,4.2), ...)
+  axis(2, at=1:num_lines, labels=gsub(".*)", "", rownames(confint)), las=2)
+  segments(log10(confint$`2.5 %`), 1:num_lines, log10(confint$`97.5 %`), 1:num_lines)
+  abline(v=0, lty=2)
+  # Add * for significance
+  sig.points = c("***","**","*","")[.bincode(confint$pvalue, breaks=c(0,0.001,0.01,0.05,1))]
+    text(log10(confint$estimate), (1:num_lines)+0.15, sig.points, cex=1.2)
+}
+
+  
+genes_of_interest <- c("DNMT3A","TET2","ASXL1","JAK2","PPM1D","SF3B1")
+indics <- c("NON-SMALL CELL LUNG CANCER", "TRIPLE NEGATIVE BREAST CANCER", "BREAST CANCER","CUTANEOUS MELANOMA","COLORECTAL CANCER")
+
+par(mfrow=c(2,3))
+for(gene in genes_of_interest){
+  pos_pats <- unique(c(subset(snvs, gene_name == gene)$anon_ID,
+                       subset(indels, gene_name == gene)$anon_ID))
+
+  pat_subset <- subset(pat_data, !is.na(age_bin) & !is.na(INDIC) & !is.na(prior_chemo))
+  pat_subset$chemo_time_group[!pat_subset$prior_chemo] <- "no_chemo"
+  pat_subset$chemo_time_group <- factor(pat_subset$chemo_time_group, levels=c("no_chemo","longer_90_days","within_90_days"))
+  
+  pat_subset$CH <- c(0,1)[as.numeric(pat_subset$anon_ID %in% pos_pats)+1]
+  pat_subset_indics <- subset(pat_subset, unlist(INDIC) %in% indics)
+  
+  # Remove indications with 0 mutations in gene of interest
+  indics_keep <- indics[indics %in% subset(pat_subset_indics, INDIC %in% indics & CH==1)$INDIC]
+  pat_subset_indics <- subset(pat_subset_indics, INDIC %in% indics_keep)
+  
+  model <- glm(pat_subset_indics$CH ~ unlist(pat_subset_indics$INDIC) + pat_subset_indics$age + pat_subset_indics$chemo_time_group, family="binomial")
+
+  plot_odds(model, length(indics_keep), main=gene)
+
+}
+
+
+pdf("../output/Figure_S7_geneOdds_Script03.pdf", width=14, height=5, useDingbats = F)
+par(mfrow=c(2,3))
+for(gene in genes_of_interest){
+  pos_pats <- unique(c(subset(snvs, gene_name == gene)$anon_ID,
+                       subset(indels, gene_name == gene)$anon_ID))
+
+  pat_subset <- subset(pat_data, !is.na(age_bin) & !is.na(INDIC) & !is.na(prior_chemo))
+  pat_subset$chemo_time_group[!pat_subset$prior_chemo] <- "no_chemo"
+  pat_subset$chemo_time_group <- factor(pat_subset$chemo_time_group, levels=c("no_chemo","longer_90_days","within_90_days"))
+  
+  pat_subset$CH <- c(0,1)[as.numeric(pat_subset$anon_ID %in% pos_pats)+1]
+  pat_subset_indics <- subset(pat_subset, unlist(INDIC) %in% indics)
+  
+  # Remove indications with 0 mutations in gene of interest
+  indics_keep <- indics[indics %in% subset(pat_subset_indics, INDIC %in% indics & CH==1)$INDIC]
+  pat_subset_indics <- subset(pat_subset_indics, INDIC %in% indics_keep)
+  
+  model <- glm(pat_subset_indics$CH ~ unlist(pat_subset_indics$INDIC) + pat_subset_indics$age + pat_subset_indics$chemo_time_group, family="binomial")
+
+  plot_odds(model, length(indics_keep), main=gene)
+}
+dev.off()
+
+
+```
+
+```{r}
+sessionInfo()
+```
+

@@ -1,0 +1,354 @@
+---
+title: "Script 02: external dataset validation"
+output: html_document
+---
+
+```{r}
+print(date())
+library(pROC)
+library(openxlsx)
+```
+
+
+Performance
+```{r}
+auc <- function(true_class, probs){
+  test_roc <- roc(true_class ~ probs, plot=F)
+  test_roc$auc
+}
+
+performance <- function(x, model_column, label_column, chip_label, tumor_label, prob_column){
+  x <- x[x[,label_column] %in% c(chip_label, tumor_label), ]
+  
+  tp <- sum(x[,label_column]==chip_label & x[,model_column]=="wbc")
+  fp <- sum(x[,label_column]==tumor_label & x[,model_column]=="wbc")
+  tn <- sum(x[,label_column]==tumor_label & x[,model_column]=="biopsy")
+  fn <- sum(x[,label_column]==chip_label & x[,model_column]=="biopsy")
+  
+  f1 <- tp / (tp + 0.5*(fp+fn))
+  precision <- tp / (tp+fp)
+  recall <- tp / (tp+fn)
+  fdr <- fp/(tp+fp)
+  fpr <- fp/(fp+tn)
+  
+  auroc <- auc(x[,label_column], x[,prob_column])
+  
+  return(list(tp=tp,fp=fp,tn=tn,fn=fn,f1=f1,precision=precision,recall=recall,fdr=fdr, auc=as.numeric(auroc)))
+}
+
+##
+var_zhang <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Zhang_et_al_predictions")
+
+zhang_all_lr <- performance(var_zhang, model_column="chip_log_pred", label_column="isCH", chip_label="yes", 
+                           tumor_label="no", prob_column = "chip_log_pred_prob.wbc")
+zhang_all_rf <- performance(var_zhang, model_column="chip_rf_pred", label_column="isCH", chip_label="yes", 
+                           tumor_label="no", prob_column = "chip_rf_pred_prob.wbc")
+
+zhang_tissue_lr <- performance(var_zhang, model_column="chip_log_pred", label_column="Tag", chip_label="WBC matched", 
+                               tumor_label="Biopsy matched", prob_column = "chip_log_pred_prob.wbc")
+zhang_tissue_rf <- performance(var_zhang, model_column="chip_rf_pred", label_column="Tag", chip_label="WBC matched", 
+                               tumor_label="Biopsy matched", prob_column = "chip_rf_pred_prob.wbc")
+
+##
+var_chin <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Chin_et_al_predictions")
+var_chin$inWBC <- var_chin$wbc.af > 0
+
+chin_lr <- performance(var_chin, model_column="chip_log_pred", label_column="inWBC", chip_label="TRUE", 
+                       tumor_label="FALSE", prob_column = "chip_log_pred_prob.wbc")
+chin_rf <- performance(var_chin, model_column="chip_rf_pred", label_column="inWBC", chip_label="TRUE", 
+                       tumor_label="FALSE", prob_column = "chip_rf_pred_prob.wbc")
+
+##
+var_chabon <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Chabon_et_al_predictions")
+chabon_lr <- performance(var_chabon, model_column="chip_log_pred", label_column="Mutation.status.in.matched.WBCsd", chip_label="WBC present",
+                         tumor_label="WBC absent", prob_column = "chip_log_pred_prob.wbc")
+chabon_rf <- performance(var_chabon, model_column="chip_rf_pred", label_column="Mutation.status.in.matched.WBCsd", chip_label="WBC present", 
+                        tumor_label="WBC absent", prob_column = "chip_rf_pred_prob.wbc")
+
+##
+var_leal <- read.xlsx("../data_files/Data_file_S2_external_predictions.xlsx", sheet="Leal_et_al_predictions")
+leal_lr <- performance(var_leal, model_column="chip_log_pred", label_column="Origin", chip_label="CHIP", 
+                       tumor_label="ctDNA", prob_column = "chip_log_pred_prob.wbc")
+leal_rf <- performance(var_leal, model_column="chip_rf_pred", label_column="Origin", chip_label="CHIP", 
+                       tumor_label="ctDNA", prob_column = "chip_rf_pred_prob.wbc")
+
+```
+Table S6: performance on public datasets
+```{r}
+s6 <- cbind(zhang_lr = zhang_all_lr,
+                zhang_rf = zhang_all_rf,
+                zhang_tumor_lr = zhang_tissue_lr,
+                zhang_tumor_rf = zhang_tissue_rf,
+                leal_lr = leal_lr,
+                leal_rf = leal_rf,
+                chabon_lr = chabon_lr,
+                chabon_rf = chabon_rf,
+                chin_lr = chin_lr,
+                chin_rf = chin_rf)
+
+print(t(s6[c("auc","precision","recall","f1"),]))
+```
+Summary of false positives, etc in Zhang and Chin datasets
+Supplementary Note figure
+```{r, fig.width=5, fig.height=4.5}
+## Zhang
+table(var_zhang[,c("isCH","chip_log_pred")])
+table(var_zhang[,c("Tag","chip_log_pred")])
+
+table(var_zhang[,c("isCH","chip_rf_pred")])
+table(var_zhang[,c("Tag","chip_rf_pred")])
+
+# Barplot for most commonly misclassified genes (FP)
+freq <- table(subset(var_zhang, isCH=="no" & chip_log_pred == "wbc")$gene_name)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Logistic regression")
+pdf("../output/Figure_S12a_Script02.pdf", width=6, height=5)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Logistic regression")
+dev.off()
+
+freq <- table(subset(var_zhang, Tag=="Biopsy matched" & chip_log_pred == "wbc")$gene_name)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Logistic regression, matched tissue")
+pdf("../output/Figure_S12b_Script02.pdf", width=6, height=5)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Logistic regression, matched tissue")
+dev.off()
+
+freq <- table(subset(var_zhang, isCH=="no" & chip_rf_pred == "wbc")$gene_name)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Random forest")
+pdf("../output/Figure_S12d_Script02.pdf", width=6, height=5)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Random forest")
+dev.off()
+
+freq <- table(subset(var_zhang, Tag=="Biopsy matched" & chip_rf_pred == "wbc")$gene_name)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Random forest, matched tissue")
+pdf("../output/Figure_S12e_Script02.pdf", width=6, height=5)
+barplot(sort(freq, decreasing=T)[1:20], las=2, ylab="Number of variants", main="Random forest, matched tissue")
+dev.off()
+
+# AF vs FPR
+af_vs_fpr <- function(x, model_column, label_column, chip_label, tumor_label, af_column, af_bins, verticals=NULL, ...){
+  x <- x[x[,label_column] %in% c(chip_label, tumor_label), ]
+  
+  fpr_results <- data.frame(log2_af_interval=paste0("[", af_bins[1:(length(af_bins)-1)], ", ", af_bins[2:length(af_bins)], ")"),
+                            af_interval=paste0("[", 2^af_bins[1:(length(af_bins)-1)], ", ", 2^af_bins[2:length(af_bins)], ")"),
+                            N=rep(NA, length(af_bins)-1),
+                            FPR=rep(NA, length(af_bins)-1))
+  for(i in 1:(length(af_bins)-1)){
+    x_subset <- x[x[,af_column] >= af_bins[i] & x[,af_column] < af_bins[i+1],]
+    fpr_results[i,"N"] <- nrow(x_subset)
+    
+    fp <- sum(x_subset[,label_column]==tumor_label & x_subset[,model_column]=="wbc")
+    tn <- sum(x_subset[,label_column]==tumor_label & x_subset[,model_column]=="biopsy")
+    
+    fpr <- fp/(fp+tn)
+    fpr_results[i,"FPR"] <- fpr
+  }
+  
+  plot(af_bins[2:(length(af_bins))], fpr_results$FPR, type='b', ylab="False positive rate", xlab="log2(AF) bin", ...) 
+  if(!is.null(verticals)){
+    abline(v=verticals)
+  }
+  print(fpr_results)
+}
+
+af_vs_fpr(var_zhang, "chip_log_pred", "isCH", "yes", "no", "cfdna_af", -13:0, verticals = log2(c(0.001, 0.01, 0.05,0.1,1)), main="Logistic regression")
+pdf("../output/Figure_S12c_Script02.pdf", width=6, height=5)
+af_vs_fpr(var_zhang, "chip_log_pred", "isCH", "yes", "no", "cfdna_af", -13:0, verticals = log2(c(0.001, 0.01, 0.05,0.1,1)), main="Logistic regression")
+dev.off()
+
+
+af_vs_fpr(var_zhang, "chip_rf_pred", "isCH", "yes", "no", "cfdna_af", -13:0, verticals = log2(c(0.001, 0.01, 0.05,0.1,1)), main="Random forest")
+pdf("../output/Figure_S12f_Script02.pdf", width=6, height=5)
+af_vs_fpr(var_zhang, "chip_rf_pred", "isCH", "yes", "no", "cfdna_af", -13:0, verticals = log2(c(0.001, 0.01, 0.05,0.1,1)), main="Random forest")
+dev.off()
+
+
+########
+## Chin
+
+table(var_chin[,c("inWBC","chip_log_pred")])
+table(var_chin[,c("inWBC","chip_rf_pred")])
+
+af_vs_fpr(var_chin, "chip_log_pred", "inWBC", "TRUE", "FALSE", "cfdna_af", c(seq(-10.5,-8,0.5), -6, -4, -2,0), main="Logistic regression")
+af_vs_fpr(var_chin, "chip_rf_pred", "inWBC", "TRUE", "FALSE", "cfdna_af", c(seq(-10.5,-8,0.5), -6, -4, -2,0), main="Random forest")
+
+```
+
+Variants in / not in training genes
+Table S7
+```{r}
+training <- read.csv("../data_files/Data_file_S1_MSKCC_annotated.csv", stringsAsFactors = F)
+train_genes <- unique(training$gene_name)
+
+
+zhang_train <- performance(subset(var_zhang, gene_name %in% train_genes), model_column="chip_log_pred", label_column="isCH", 
+                           chip_label="yes", tumor_label="no", prob_column = "chip_log_pred_prob.wbc")
+zhang_new <- performance(subset(var_zhang, !gene_name %in% train_genes), model_column="chip_log_pred", label_column="isCH", 
+                         chip_label="yes", tumor_label="no", prob_column = "chip_log_pred_prob.wbc")
+
+zhang_tumor_train <- performance(subset(var_zhang, gene_name %in% train_genes), model_column="chip_log_pred", label_column="Tag", 
+                                 chip_label="WBC matched", tumor_label="Biopsy matched", prob_column = "chip_log_pred_prob.wbc")
+zhang_tumor_new <- performance(subset(var_zhang, !gene_name %in% train_genes), model_column="chip_log_pred", label_column="Tag", 
+                               chip_label="WBC matched", tumor_label="Biopsy matched", prob_column = "chip_log_pred_prob.wbc")
+
+# Leal
+leal_train <- performance(subset(var_leal, gene_name %in% train_genes), model_column="chip_log_pred", label_column="Origin", 
+                          chip_label="CHIP", tumor_label="ctDNA", prob_column = "chip_log_pred_prob.wbc")
+
+# Chabon
+chabon_train <- performance(subset(var_chabon, gene_name %in% train_genes), model_column="chip_log_pred", label_column="Mutation.status.in.matched.WBCsd",
+                            chip_label="WBC present", tumor_label="WBC absent", prob_column = "chip_log_pred_prob.wbc")
+chabon_new <- performance(subset(var_chabon, !gene_name %in% train_genes), model_column="chip_log_pred", label_column="Mutation.status.in.matched.WBCsd",
+                          chip_label="WBC present", tumor_label="WBC absent", prob_column = "chip_log_pred_prob.wbc")
+
+
+# Chin
+chin_train <- performance(subset(var_chin, gene_name %in% train_genes), model_column="chip_log_pred", label_column="inWBC", 
+                          chip_label="TRUE", tumor_label="FALSE", prob_column = "chip_log_pred_prob.wbc")
+
+
+# Create table
+s7 <- data.frame("Variants_train_genes" = c(sum(var_zhang$GeneSymbol %in% train_genes),
+                                            sum(subset(var_zhang, Tag %in% c("WBC matched","Biopsy matched"))$GeneSymbol %in% train_genes),
+                                            sum(var_leal$gene_name %in% train_genes),
+                                            sum(var_chabon$gene_name %in% train_genes),
+                                            sum(var_chin$gene_name %in% train_genes)),
+                "Variant_new_genes" = c(sum(!var_zhang$GeneSymbol %in% train_genes),
+                                            sum(!subset(var_zhang, Tag %in% c("WBC matched","Biopsy matched"))$GeneSymbol %in% train_genes),
+                                            sum(!var_leal$gene_name %in% train_genes),
+                                            sum(!var_chabon$gene_name %in% train_genes),
+                                            sum(!var_chin$gene_name %in% train_genes)),
+                "AUC_train_genes" = round(100*c(zhang_train$auc, 
+                                                zhang_tumor_train$auc,
+                                                leal_train$auc,
+                                                chabon_train$auc,
+                                                chin_train$auc))/100,
+                "AUC_new_genes" = round(100*c(zhang_new$auc, 
+                                              zhang_tumor_new$auc,
+                                              NA,
+                                              chabon_new$auc,
+                                              NA))/100,
+                "Precision_train_genes" = round(100*c(zhang_train$precision, 
+                                                      zhang_tumor_train$precision,
+                                                      leal_train$precision,
+                                                      chabon_train$precision,
+                                                      chin_train$precision))/100,
+                "Precision_new_genes" = round(100*c(zhang_new$precision, 
+                                                    zhang_tumor_new$precision,
+                                                    NA,
+                                                    chabon_new$precision,
+                                                    NA))/100,
+                "Recall_train_genes" = round(100*c(zhang_train$recall, 
+                                                   zhang_tumor_train$recall,
+                                                   leal_train$recall,
+                                                   chabon_train$recall,
+                                                   chin_train$recall))/100,
+                "Recall_new_genes" = round(100*c(zhang_new$recall, 
+                                                 zhang_tumor_new$recall,
+                                                 NA,
+                                                 chabon_new$recall,
+                                                 NA))/100,
+                "F1_train_genes" = round(100*c(zhang_train$f1, 
+                                               zhang_tumor_train$f1,
+                                               leal_train$f1,
+                                               chabon_train$f1,
+                                               chin_train$f1))/100,
+                "F1_new_genes" = round(100*c(zhang_new$f1, 
+                                             zhang_tumor_new$f1,
+                                             NA,
+                                             chabon_new$f1,
+                                             NA))/100
+)
+                
+rownames(s7) <- c("Zhang, WBC/plasma","Zhang, WBC/plasma/tissue", "Leal","Chabon","Chin")
+s7
+```
+
+Changing threshold plots
+Figure S1
+```{r, fig.width=5, fig.height=5}
+
+vary_threshold <- function(x, prob_column, label_column, chip_label, tumor_label){
+  thres <- seq(0,0.99,0.01)
+  
+  results <- matrix(NA, nrow=length(thres), ncol=10)
+  rownames(results) <- thres
+  colnames(results) <- c("TP","FP","TN","FN","F1","Precision","Recall","FDR","FPR","AUC")
+  for(i in 1:length(thres)){
+    t<-thres[i]
+    x$pred <- x[,prob_column] >= t
+    results[i,"TP"] <- sum(x[,label_column]==chip_label & x$pred==TRUE)
+    results[i,"FP"] <- sum(x[,label_column]==tumor_label & x$pred==TRUE)
+    results[i,"TN"] <- sum(x[,label_column]==tumor_label & x$pred==FALSE)
+    results[i,"FN"] <- sum(x[,label_column]==chip_label & x$pred==FALSE)
+    
+    results[i,"F1"] <- results[i,"TP"] / (results[i,"TP"] + 0.5*(results[i,"FP"]+results[i,"FN"]))
+    results[i,"Precision"] <- results[i,"TP"] / (results[i,"TP"]+results[i,"FP"])
+    results[i,"Recall"] <- results[i,"TP"] / (results[i,"TP"]+results[i,"FN"])
+    results[i,"FDR"] <- results[i,"FP"]/(results[i,"TP"]+results[i,"FP"])
+    results[i,"FPR"] <- results[i,"FP"]/(results[i,"FP"]+results[i,"TN"])
+  }
+  return(data.frame(results))
+}
+  
+
+zhang_thres <- vary_threshold(var_zhang, prob_column = "chip_log_pred_prob.wbc", label_column="isCH", chip_label="yes", tumor_label="no")
+leal_thres <- vary_threshold(var_leal, prob_column = "chip_log_pred_prob.wbc", label_column="Origin", chip_label="CHIP", tumor_label="ctDNA")
+chin_thres <- vary_threshold(var_chin, prob_column = "chip_log_pred_prob.wbc", label_column="inWBC", chip_label="TRUE", tumor_label="FALSE")
+chabon_thres <- vary_threshold(var_chabon, prob_column = "chip_log_pred_prob.wbc", label_column="Mutation.status.in.matched.WBCsd", 
+                               chip_label="WBC present", tumor_label="WBC absent")
+
+
+for(perf in c("F1","Precision","Recall","FDR")){
+  plot(rownames(zhang_thres), zhang_thres[,perf], type='l', xlab="Threshold", ylab=perf, main=perf,
+       ylim=c(0, max(c(zhang_thres[,perf], leal_thres[,perf], chin_thres[,perf], chabon_thres[,perf]))), lwd=1.5)
+  lines(rownames(leal_thres), leal_thres[,perf], col='#1b9e77', lwd=1.5)
+  lines(rownames(chin_thres), chin_thres[,perf], col='#d95f02', lwd=1.5)
+  lines(rownames(chabon_thres), chabon_thres[,perf], col='#7570b3', lwd=1.5)
+}
+
+pdf("../output/Figure_S1_threshold_Script02.pdf", width=8.5, height=3)
+par(mfrow=c(1,3))
+
+for(perf in c("F1","Precision","Recall")){
+  plot(rownames(zhang_thres), zhang_thres[,perf], type='l', xlab="Threshold", ylab=perf, main=perf,
+       ylim=c(0, max(c(zhang_thres[,perf], leal_thres[,perf], chin_thres[,perf], chabon_thres[,perf]))), lwd=1.5)
+  lines(rownames(leal_thres), leal_thres[,perf], col='#1b9e77', lwd=1.5)
+  lines(rownames(chin_thres), chin_thres[,perf], col='#d95f02', lwd=1.5)
+  lines(rownames(chabon_thres), chabon_thres[,perf], col='#7570b3', lwd=1.5)
+}
+
+dev.off()
+
+```
+
+Figure S11: Histogram of all allele fractions
+```{r}
+pdf("../output/Figure_S11_af_hists_Script02.pdf", width=12, height=8, useDingbats = F)
+par(mfrow=c(2,3))
+# Zhang
+hist(log2(subset(var_zhang, isCH=="yes")$caseAF), col=rgb(1,0,0,0.3), freq = F, main="Zhang, Pan-Cancer", xlim=c(-12.5,0), xlab="Log2(AF)")
+hist(log2(subset(var_zhang, isCH=="no")$caseAF), col=rgb(0,0,1,0.3), freq=F, add=T)
+
+# Leal
+hist(log2(subset(var_leal, Origin=="CHIP")$Mutant.Allele.Fraction), col=rgb(1,0,0,0.3), freq = F, main="Leal, Gastric cancer", xlim=c(-12.5,0), ylim=c(0,0.35), xlab="Log2(AF)")
+hist(log2(subset(var_leal, Origin=="ctDNA")$Mutant.Allele.Fraction), col=rgb(0,0,1,0.3), freq=F, add=T)
+
+# Chabon
+hist(log2(subset(var_chabon, Mutation.status.in.matched.WBCsd=="WBC present")$Plasma.variant.allele.frequency), col=rgb(1,0,0,0.3), freq = F, main="Chabon, Lung cancer", xlim=c(-12.5,0), ylim=c(0,0.35), xlab="Log2(AF)")
+hist(log2(subset(var_chabon, Mutation.status.in.matched.WBCsd=="WBC absent")$Plasma.variant.allele.frequency), col=rgb(0,0,1,0.3), freq=F, add=T)
+
+# Chin
+hist(log2(subset(var_chin, inWBC=="TRUE")$plasma.af), col=rgb(1,0,0,0.3), freq = F, main="Chin, Breast cancer", xlim=c(-12.5,0), ylim=c(0,0.55), xlab="Log2(AF)")
+hist(log2(subset(var_chin, inWBC=="FALSE")$plasma.af), col=rgb(0,0,1,0.3), freq=F, add=T)
+
+# MSK
+msk <- read.csv("../data_files/Data_file_S1_MSKCC_annotated.csv")
+hist(log2(subset(msk, bio_source=="wbc_matched")$cfdna_af), col=rgb(1,0,0,0.3), freq = F, main="MSKCC, Pan-Cancer", xlim=c(-12.5,0), xlab="Log2(AF)")
+hist(log2(subset(msk, bio_source=="biopsy_matched")$cfdna_af), col=rgb(0,0,1,0.3), freq = F, add=T)
+
+dev.off()
+
+```
+
+```{r}
+sessionInfo()
+```

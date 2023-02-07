@@ -1,0 +1,253 @@
+---
+title: "Script 01: Logistic regression and Random Forest CHIP models"
+author: "Lauren Fairchild"
+output: html_document
+---
+
+In this Rmd, the logistic regression and random forest models used in the manuscript "Clonal hematopoiesis detection in cancer patients using cell free DNA sequencing" are built and the following figures are generated:
+
+* Table S1, S3, S4
+* Figures 1B, 1C, 1D
+
+
+```{r}
+print(date())
+```
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(data.table)
+library(ROCR)
+library(pROC)
+library(caret)
+library(knitr)
+
+RNGkind(sample.kind = "Rounding")
+set.seed(123)
+```
+
+Function to calculate performance metrics
+```{r}
+# performance measures
+get_stats <- function(preds, true_class, probs){
+  test_roc <- roc(true_class ~ probs, plot=F)
+  print(test_roc$auc)
+  
+  confusion <- table(preds, true_class)
+  
+  # Let's say wbc = positive
+  tp <- confusion["wbc","wbc"]
+  fp <- confusion["wbc","biopsy"]
+  tn <- confusion["biopsy","biopsy"]
+  fn <- confusion["biopsy","wbc"]
+  
+  precision <- tp / (tp+fp)
+  recall <- TPR <- tp / (tp + fn)
+  TNR <- tn / (tn + fp)
+  
+  f1 <- 2 * ((precision * recall) / (precision + recall))
+  bacc <- (TPR + TNR) / 2
+
+  return(c(tp=tp,fp=fp,tn=tn,fn=fn,prec=precision,rec=recall,TNR=TNR,f1=f1,bacc=bacc,roc=test_roc$auc))
+}
+
+```
+
+
+
+Load MSK training data 
+Table S1: Description of MSK dataset
+```{r warning = FALSE}
+data <- read.csv("../data_files/Data_file_S1_MSKCC_annotated.csv")
+data <- data[which(!duplicated(data[,1:2])),]
+
+pat_table <- unique(data[,c("library.id","tissue")])
+table(pat_table$tissue)
+
+table(data[,c("tissue","bio_source")])
+```
+
+
+Train random forest and logistic regression models
+```{r}
+# Format data
+data$class <- gsub("_.*", "", data$bio_source)
+data$gnomad_AF[is.na(data$gnomad_AF)] <- 0
+data$freq.heme_lymph[is.na(data$freq.heme_lymph)] <- 0
+data$freq.solid[is.na(data$freq.solid)] <- 0
+data$population.frequency[is.na(data$population.frequency)] <- 0
+data <- as.data.frame(data, stringsAsFactors=F)
+
+cols2use <- c("class","gene_name_label","CH_Mutation","median_ctDNA", "tq_ctDNA", grep("SBS", colnames(data), value=T), "cfdna_af", 
+              "gnomad_AF","inCosmic","freq.heme_lymph","freq.solid", "population.frequency")
+
+
+#####
+# Set up caret
+train_data <- data.frame(subset(data, class %in% c("biopsy","wbc") & model_group !="valiation"))
+
+idx_agg <- aggregate(1:nrow(train_data), by=list(train_data$model_group), paste)
+idx <- as.list(idx_agg[,2])
+names(idx) <- idx_agg[,1]
+idx <- lapply(idx, function(x){as.numeric(x)})
+
+train_data$cfdna_af <- as.numeric(as.character(train_data$cfdna_af))
+train_data$gnomad_AF <- as.numeric(as.character(train_data$gnomad_AF))
+
+
+rf_model <- train(
+  form = class ~ .,
+  data = train_data[,cols2use],
+  trControl = trainControl(method = "cv", indexOut=idx),
+  method = "rf",
+  tuneLength=5
+)
+
+train_data$cfdna_af <- log2(train_data$cfdna_af)
+log_model <- train(
+  form = class ~ .,
+  data = train_data[,cols2use],
+  trControl = trainControl(method = "cv", indexOut=idx[1:10]),
+  method = "glm",
+  family = "binomial"
+)
+
+```
+
+Table S3: Performance on MSKCC training and testing datasets
+```{r}
+val_set <- subset(data, data$model_group=="valiation")
+val_set$cfdna_af <- as.numeric(as.character(val_set$cfdna_af))
+val_set$gnomad_AF <- as.numeric(as.character(val_set$gnomad_AF))
+
+training_results <- data.frame(LR_training=get_stats(predict(log_model), train_data$class, predict(log_model, type="prob")[,2]),
+                               RF_training=get_stats(predict(rf_model), train_data$class, predict(rf_model, type="prob")[,2]))
+
+val_set_log <- val_set
+val_set_log$cfdna_af <- log2(val_set_log$cfdna_af)
+
+testing_results <- data.frame(LR_testing=get_stats(predict(log_model, newdata = val_set_log), val_set_log$class, 
+                                                   predict(log_model, type="prob", newdata = val_set_log)[,2]),
+                              RF_testing = get_stats(predict(rf_model, newdata = val_set), val_set$class, 
+                                                     predict(rf_model, type="prob", newdata = val_set)[,2]))
+
+print(t(training_results[c("roc","prec","rec","f1"),]))
+
+print(t(testing_results[c("roc","prec","rec","f1"),]))
+
+```
+
+Figure 1b - ROC comparison
+```{r fig.width=5, fig.height=5}
+plot_rocr <- function(model_preds, true_class, colors, ...){
+  for (i in 1:ncol(model_preds)) {
+    plot(performance(prediction(model_preds[,i],true_class),"tpr","fpr"), 
+         add=(i!=1),col=colors[i],lwd=2, ...)
+  }
+  legend("bottomright", colnames(model_preds), lty=1, col=colors, bty='n')
+}
+
+preds <- data.frame(LogisticRegression=predict(log_model, type="prob", newdata = val_set_log)[,2],
+                   RandomForest=predict(rf_model, type="prob", newdata = val_set)[,2])
+plot_rocr(preds, val_set_log$class, c("black","red"))
+
+pdf("../output/Figure_1b_ROC_comparison_Script01.pdf", width=5, height=5, useDingbats = F)
+plot_rocr(preds, val_set_log$class, c("black","red"))
+dev.off()
+
+
+```
+
+Figure 1c,d - variable importance plots
+```{r}
+# Plot of logistic regression feature importance
+par(mfrow=c(1,2))
+plot(varImp(rf_model), top=20, xlim=c(-5,105), main="Random Forest feature importance")
+plot(varImp(log_model), top=20, xlim=c(-5,105), main="Logistic Regression feature importance")
+
+
+pdf("../output/Figure_1c_RF_feature_importance_Script01.pdf", width=6, height=4, useDingbats = F)
+plot(varImp(rf_model), top=20, xlim=c(-5,105), main="Random Forest feature importance")
+dev.off()
+
+pdf("../output/Figure_1d_LR_feature_importance_Script01.pdf", width=6, height=4, useDingbats = F)
+plot(varImp(log_model), top=20, xlim=c(-5,105), main="Logistic Regression feature importance")
+dev.off()
+
+
+```
+Testing with held out variants from healthy patients
+```{r}
+train_data <- data.frame(subset(data, class %in% c("biopsy","wbc") & model_group !="valiation"))
+control_data <- subset(data, tissue == "Control" & class != "vuso")
+train_data <- subset(train_data, tissue != "Control")
+
+
+idx_agg <- aggregate(1:nrow(train_data), by=list(train_data$model_group), paste)
+idx <- as.list(idx_agg[,2])
+names(idx) <- idx_agg[,1]
+idx <- lapply(idx, function(x){as.numeric(x)})
+
+train_data$cfdna_af <- as.numeric(as.character(train_data$cfdna_af))
+train_data$gnomad_AF <- as.numeric(as.character(train_data$gnomad_AF))
+
+
+rf_model_control <- train(
+  form = class ~ .,
+  data = train_data[,cols2use],
+  trControl = trainControl(method = "cv", indexOut=idx),
+  method = "rf",
+  tuneLength=5
+)
+
+train_data$cfdna_af <- log2(train_data$cfdna_af)
+log_model_control <- train(
+  form = class ~ .,
+  data = train_data[,cols2use],
+  trControl = trainControl(method = "cv", indexOut=idx[1:10]),
+  method = "glm",
+  family = "binomial"
+)
+
+val_set <- control_data
+val_set$cfdna_af <- as.numeric(as.character(val_set$cfdna_af))
+val_set$gnomad_AF <- as.numeric(as.character(val_set$gnomad_AF))
+
+val_set_log <- val_set
+val_set_log$cfdna_af <- log2(val_set_log$cfdna_af)
+lr_control_preds <- predict(log_model_control, newdata = val_set_log)
+rf_control_preds <- predict(rf_model_control, newdata = val_set)
+
+control_preds <- data.frame(lr_pred=lr_control_preds, rf_pred=rf_control_preds, gene = val_set_log$gene_name)
+```
+
+Table S4:Table of mistakes made by each model and their genes
+```{r}
+lr_mistake_genes <- table(subset(control_preds, lr_pred == "biopsy")$gene)
+rf_mistake_genes <- table(subset(control_preds, rf_pred == "biopsy")$gene)
+
+lr_mistake_genes <- lr_mistake_genes[lr_mistake_genes != 0]
+rf_mistake_genes <- rf_mistake_genes[rf_mistake_genes != 0]
+
+all_genes <- union(names(lr_mistake_genes), names(rf_mistake_genes))
+mistake_mat <- data.frame(Gene=all_genes,
+                          LR_mistakes=as.numeric(lr_mistake_genes[all_genes]), 
+                          RF_mistakes=as.numeric(rf_mistake_genes[all_genes]))
+mistake_mat[is.na(mistake_mat)] <- 0
+
+kable(rbind(mistake_mat[order(mistake_mat$Gene),], c("Total", colSums(mistake_mat[,2:3]))))
+```
+
+
+
+```{r}
+# Save model
+saveRDS(log_model, "../output/logistic_log2_model_msk.RDS")
+saveRDS(rf_model, "../output/rf_model_msk.RDS")
+
+```
+
+```{r}
+sessionInfo()
+```
